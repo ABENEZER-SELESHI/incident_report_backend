@@ -1,0 +1,29 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build folders
+dist/
+build/
+
+# Coverage
+coverage/
+
+# Local dev tools
+.vscode/
+.idea/
+.kiro/
+
+# Optional (if you add file uploads later)
+uploads/
