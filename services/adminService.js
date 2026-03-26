@@ -15,10 +15,11 @@ const { v4: uuidv4 } = require("uuid");
  */
 const getDashboardStats = async (woredaId) => {
   try {
-    const [statusRes, categoryRes, priorityRes, resolutionRes] = await Promise.all([
-      // Counts per status + total
-      pool.query(
-        `SELECT
+    const [statusRes, categoryRes, priorityRes, resolutionRes] =
+      await Promise.all([
+        // Counts per status + total
+        pool.query(
+          `SELECT
            COUNT(*)                                          AS total,
            COUNT(*) FILTER (WHERE status='reported')        AS reported,
            COUNT(*) FILTER (WHERE status='verified')        AS verified,
@@ -26,41 +27,41 @@ const getDashboardStats = async (woredaId) => {
            COUNT(*) FILTER (WHERE status='in_progress')     AS in_progress,
            COUNT(*) FILTER (WHERE status='resolved')        AS resolved
          FROM issues WHERE woreda_id=$1`,
-        [woredaId]
-      ),
-      // Counts per category
-      pool.query(
-        `SELECT category, COUNT(*)::int AS count
+          [woredaId],
+        ),
+        // Counts per category
+        pool.query(
+          `SELECT category, COUNT(*)::int AS count
          FROM issues WHERE woreda_id=$1
          GROUP BY category ORDER BY count DESC`,
-        [woredaId]
-      ),
-      // High/critical priority open issues
-      pool.query(
-        `SELECT COUNT(*)::int AS count
+          [woredaId],
+        ),
+        // High/critical priority open issues
+        pool.query(
+          `SELECT COUNT(*)::int AS count
          FROM issues
          WHERE woreda_id=$1
            AND severity IN ('high','critical')
            AND status NOT IN ('resolved','closed')`,
-        [woredaId]
-      ),
-      // Average resolution time (hours) over last 30 days
-      pool.query(
-        `SELECT ROUND(
+          [woredaId],
+        ),
+        // Average resolution time (hours) over last 30 days
+        pool.query(
+          `SELECT ROUND(
            AVG(EXTRACT(EPOCH FROM (resolved_at - reported_at)) / 3600)::numeric, 2
          ) AS avg_hours
          FROM issues
          WHERE woreda_id=$1
            AND status IN ('resolved','closed')
            AND resolved_at >= NOW() - INTERVAL '30 days'`,
-        [woredaId]
-      ),
-    ]);
+          [woredaId],
+        ),
+      ]);
 
     return {
-      totals:               statusRes.rows[0],
-      by_category:          categoryRes.rows,
-      high_priority_count:  priorityRes.rows[0].count,
+      totals: statusRes.rows[0],
+      by_category: categoryRes.rows,
+      high_priority_count: priorityRes.rows[0].count,
       avg_resolution_hours: resolutionRes.rows[0].avg_hours,
     };
   } catch (err) {
@@ -91,7 +92,7 @@ const getPendingIssues = async (woredaId, limit = 50) => {
          AND i.status IN ('reported','verified')
        ORDER BY i.priority DESC, i.reported_at ASC
        LIMIT $2`,
-      [woredaId, limit]
+      [woredaId, limit],
     );
     return result.rows;
   } catch (err) {
@@ -109,7 +110,14 @@ const getPendingIssues = async (woredaId, limit = 50) => {
  */
 const getIssuesByWoreda = async (woredaId, filters = {}) => {
   try {
-    const { status, category, from_date, to_date, page = 1, limit = 20 } = filters;
+    const {
+      status,
+      category,
+      from_date,
+      to_date,
+      page = 1,
+      limit = 20,
+    } = filters;
     const params = [woredaId];
     const conditions = ["i.woreda_id = $1"];
 
@@ -150,19 +158,19 @@ const getIssuesByWoreda = async (woredaId, filters = {}) => {
          WHERE ${where}
          ORDER BY i.reported_at DESC
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-        [...params, Number(limit), offset]
+        [...params, Number(limit), offset],
       ),
       pool.query(
         `SELECT COUNT(*)::int AS total FROM issues i WHERE ${where}`,
-        params
+        params,
       ),
     ]);
 
     return {
       issues: dataRes.rows,
-      total:  countRes.rows[0].total,
-      page:   Number(page),
-      limit:  Number(limit),
+      total: countRes.rows[0].total,
+      page: Number(page),
+      limit: Number(limit),
     };
   } catch (err) {
     console.error("[adminService.getIssuesByWoreda]", err.message);
@@ -189,7 +197,7 @@ const assignTechnician = async (issueId, technicianId, adminId) => {
        SET assigned_to=$1, assigned_by=$2, status='assigned', assigned_at=NOW()
        WHERE id=$3
        RETURNING *`,
-      [technicianId, adminId, issueId]
+      [technicianId, adminId, issueId],
     );
 
     if (issueRes.rows.length === 0) {
@@ -200,7 +208,7 @@ const assignTechnician = async (issueId, technicianId, adminId) => {
       `INSERT INTO technician_assignments
          (id, issue_id, technician_id, assigned_by, status)
        VALUES ($1,$2,$3,$4,'pending')`,
-      [uuidv4(), issueId, technicianId, adminId]
+      [uuidv4(), issueId, technicianId, adminId],
     );
 
     await client.query("COMMIT");
@@ -220,7 +228,7 @@ const assignTechnician = async (issueId, technicianId, adminId) => {
  * @param {string} woredaId
  * @returns {Promise<object[]>}
  */
-const getTechniciansByWoreda = async (woredaId) => {
+const getAllTechnicians = async () => {
   try {
     const result = await pool.query(
       `SELECT
@@ -231,15 +239,14 @@ const getTechniciansByWoreda = async (woredaId) => {
        FROM users u
        LEFT JOIN technician_assignments ta ON ta.technician_id = u.id
        WHERE u.role='technician'
-         AND u.admin_unit_id=$1
          AND u.is_active=TRUE
        GROUP BY u.id
        ORDER BY active_assignments ASC, u.full_name ASC`,
-      [woredaId]
     );
+
     return result.rows;
   } catch (err) {
-    console.error("[adminService.getTechniciansByWoreda]", err.message);
+    console.error("[adminService.getAllTechnicians]", err.message);
     throw err;
   }
 };
@@ -249,5 +256,5 @@ module.exports = {
   getPendingIssues,
   getIssuesByWoreda,
   assignTechnician,
-  getTechniciansByWoreda,
+  getAllTechnicians,
 };

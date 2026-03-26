@@ -12,10 +12,12 @@ app.use(express.urlencoded({ extended: true }));
 const authRoutes = require("./routes/authRoutes");
 const issueRoutes = require("./routes/issueRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const technicianRoutes = require("./routes/technicianRoutes");
 
 app.use("/auth", authRoutes);
 app.use("/issues", issueRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/technician", technicianRoutes);
 
 // Health check route
 app.get("/", (req, res) => {

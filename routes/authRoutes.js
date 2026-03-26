@@ -1,11 +1,11 @@
 // routes/authRoutes.js
-const express    = require("express");
-const { body }   = require("express-validator");
-const rateLimit  = require("express-rate-limit");
-const router     = express.Router();
+const express = require("express");
+const { body } = require("express-validator");
+const rateLimit = require("express-rate-limit");
+const router = express.Router();
 
 const authController = require("../controllers/authController");
-const authenticate   = require("../middleware/authMiddleware");
+const authenticate = require("../middleware/authMiddleware");
 
 // ---------------------------------------------------------------------------
 // Rate limiters
@@ -15,7 +15,10 @@ const authenticate   = require("../middleware/authMiddleware");
 const otpLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 5,
-  message: { success: false, message: "Too many OTP requests. Try again in 10 minutes." },
+  message: {
+    success: false,
+    message: "Too many OTP requests. Try again in 10 minutes.",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -38,9 +41,12 @@ const phoneValidator = body("phone")
 
 const passwordValidator = (field) =>
   body(field)
-    .isLength({ min: 8 }).withMessage(`${field} must be at least 8 characters`)
-    .matches(/[A-Z]/).withMessage(`${field} must contain an uppercase letter`)
-    .matches(/[0-9]/).withMessage(`${field} must contain a number`);
+    .isLength({ min: 8 })
+    .withMessage(`${field} must be at least 8 characters`)
+    .matches(/[A-Z]/)
+    .withMessage(`${field} must contain an uppercase letter`)
+    .matches(/[0-9]/)
+    .withMessage(`${field} must contain a number`);
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -56,7 +62,7 @@ router.post(
     passwordValidator("password"),
     body("email").optional().isEmail().withMessage("Invalid email address"),
   ],
-  authController.signup
+  authController.signup,
 );
 
 // POST /auth/verify-signup — confirm OTP and activate account
@@ -65,9 +71,12 @@ router.post(
   otpLimiter,
   [
     phoneValidator,
-    body("code").isLength({ min: 6, max: 6 }).isNumeric().withMessage("code must be 6 digits"),
+    body("code")
+      .isLength({ min: 6, max: 6 })
+      .isNumeric()
+      .withMessage("code must be 6 digits"),
   ],
-  authController.verifySignup
+  authController.verifySignup,
 );
 
 // POST /auth/login — password-based login
@@ -78,7 +87,7 @@ router.post(
     phoneValidator,
     body("password").notEmpty().withMessage("password is required"),
   ],
-  authController.login
+  authController.login,
 );
 
 // POST /auth/refresh — rotate refresh token
@@ -92,7 +101,7 @@ router.post(
   "/forgot-password",
   otpLimiter,
   [phoneValidator],
-  authController.forgotPassword
+  authController.forgotPassword,
 );
 
 // POST /auth/reset-password — verify OTP and set new password
@@ -101,10 +110,13 @@ router.post(
   authLimiter,
   [
     phoneValidator,
-    body("code").isLength({ min: 6, max: 6 }).isNumeric().withMessage("code must be 6 digits"),
+    body("code")
+      .isLength({ min: 6, max: 6 })
+      .isNumeric()
+      .withMessage("code must be 6 digits"),
     passwordValidator("new_password"),
   ],
-  authController.resetPassword
+  authController.resetPassword,
 );
 
 // POST /auth/change-password — change password while logged in (authenticated)
@@ -113,10 +125,38 @@ router.post(
   authenticate,
   authLimiter,
   [
-    body("current_password").notEmpty().withMessage("current_password is required"),
+    body("current_password")
+      .notEmpty()
+      .withMessage("current_password is required"),
     passwordValidator("new_password"),
   ],
-  authController.changePassword
+  authController.changePassword,
+);
+
+// Admin signup (protected or not depending on your system)
+router.post(
+  "/signup-admin",
+  authLimiter,
+  [
+    phoneValidator,
+    body("full_name").notEmpty(),
+    passwordValidator("password"),
+    body("admin_unit_id").notEmpty().withMessage("admin_unit_id is required"),
+  ],
+  authController.signupAdmin,
+);
+
+// Employee signup
+router.post(
+  "/signup-employee",
+  authLimiter,
+  [
+    phoneValidator,
+    body("full_name").notEmpty(),
+    passwordValidator("password"),
+    body("admin_unit_id").notEmpty().withMessage("admin_unit_id is required"),
+  ],
+  authController.signupEmployee,
 );
 
 module.exports = router;

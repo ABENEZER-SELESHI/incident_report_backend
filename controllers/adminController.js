@@ -10,7 +10,10 @@ const getDashboard = async (req, res) => {
   try {
     const woreda_id = req.user.admin_unit_id;
     if (!woreda_id) {
-      return res.status(400).json({ success: false, message: "No admin unit assigned to this account" });
+      return res.status(400).json({
+        success: false,
+        message: "No admin unit assigned to this account",
+      });
     }
 
     const stats = await adminService.getDashboardStats(woreda_id);
@@ -29,7 +32,10 @@ const getPendingIssues = async (req, res) => {
   try {
     const woreda_id = req.user.admin_unit_id;
     if (!woreda_id) {
-      return res.status(400).json({ success: false, message: "No admin unit assigned to this account" });
+      return res.status(400).json({
+        success: false,
+        message: "No admin unit assigned to this account",
+      });
     }
 
     const issues = await adminService.getPendingIssues(woreda_id);
@@ -48,7 +54,10 @@ const getIssues = async (req, res) => {
   try {
     const woreda_id = req.user.admin_unit_id;
     if (!woreda_id) {
-      return res.status(400).json({ success: false, message: "No admin unit assigned to this account" });
+      return res.status(400).json({
+        success: false,
+        message: "No admin unit assigned to this account",
+      });
     }
 
     const result = await adminService.getIssuesByWoreda(woreda_id, req.query);
@@ -74,7 +83,7 @@ const assignTechnician = async (req, res) => {
     const issue = await adminService.assignTechnician(
       req.params.id,
       technicianId,
-      req.user.user_id
+      req.user.user_id,
     );
 
     res.json({ success: true, message: "Technician assigned", data: issue });
@@ -91,12 +100,7 @@ const assignTechnician = async (req, res) => {
  */
 const getTechnicians = async (req, res) => {
   try {
-    const woreda_id = req.user.admin_unit_id;
-    if (!woreda_id) {
-      return res.status(400).json({ success: false, message: "No admin unit assigned to this account" });
-    }
-
-    const technicians = await adminService.getTechniciansByWoreda(woreda_id);
+    const technicians = await adminService.getAllTechnicians();
     res.json({ success: true, data: technicians });
   } catch (err) {
     console.error("[adminController.getTechnicians]", err.message);
@@ -104,4 +108,10 @@ const getTechnicians = async (req, res) => {
   }
 };
 
-module.exports = { getDashboard, getPendingIssues, getIssues, assignTechnician, getTechnicians };
+module.exports = {
+  getDashboard,
+  getPendingIssues,
+  getIssues,
+  assignTechnician,
+  getTechnicians,
+};

@@ -2,23 +2,33 @@
 const { validationResult } = require("express-validator");
 const pool = require("../db");
 const issueService = require("../services/issueService");
+const { uploadToCloudinary } = require("../services/cloudinaryService");
 
-const ADMIN_ROLES = ["woreda_admin", "zonal_admin", "regional_admin", "federal_admin"];
+const ADMIN_ROLES = [
+  "woreda_admin",
+  "zonal_admin",
+  "regional_admin",
+  "federal_admin",
+];
 
-/**
- * POST /issues
- * Create a new issue report. reporter_id is taken from the JWT payload.
- */
 const createIssue = async (req, res) => {
+  console.log("BODY:", req.body);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(422).json({ success: false, error: errors.array() });
   }
 
   try {
+    let image_url = null;
+
+    if (req.file) {
+      image_url = await uploadToCloudinary(req.file.buffer, "issues");
+    }
+
     const issue = await issueService.createIssue({
       ...req.body,
       reporter_id: req.user.user_id,
+      image_url,
     });
 
     res.status(201).json({
@@ -32,16 +42,14 @@ const createIssue = async (req, res) => {
   }
 };
 
-/**
- * GET /issues/:id
- * Fetch a single issue. Citizens may only view their own issues.
- */
 const getIssue = async (req, res) => {
   try {
     const issue = await issueService.getIssueById(req.params.id);
 
     if (!issue) {
-      return res.status(404).json({ success: false, message: "Issue not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Issue not found" });
     }
 
     const { role, user_id } = req.user;
@@ -56,13 +64,12 @@ const getIssue = async (req, res) => {
   }
 };
 
-/**
- * GET /issues/my-issues
- * Return the authenticated user's own issues with optional filters.
- */
 const getUserIssues = async (req, res) => {
   try {
-    const issues = await issueService.getUserIssues(req.user.user_id, req.query);
+    const issues = await issueService.getUserIssues(
+      req.user.user_id,
+      req.query,
+    );
     res.json({ success: true, data: issues });
   } catch (err) {
     console.error("[issueController.getUserIssues]", err.message);
@@ -70,10 +77,6 @@ const getUserIssues = async (req, res) => {
   }
 };
 
-/**
- * PATCH /issues/:id/status
- * Update issue status. Restricted to admin roles (enforced in routes).
- */
 const updateIssueStatus = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -86,7 +89,7 @@ const updateIssueStatus = async (req, res) => {
       req.params.id,
       status,
       req.user.user_id,
-      notes
+      notes,
     );
 
     res.json({ success: true, message: "Status updated", data: issue });
@@ -98,22 +101,43 @@ const updateIssueStatus = async (req, res) => {
 };
 
 /**
- * GET /issues/search
- * Search issues with filters. woreda_admin is automatically scoped to their unit.
+ * ✅ NEW: Vote on an issue (toggle vote)
  */
+const voteIssue = async (req, res) => {
+  try {
+    const result = await issueService.voteIssue(
+      req.params.id,
+      req.user.user_id,
+    );
+
+    res.json({
+      success: true,
+      message: result.message,
+      votes: result.votes,
+    });
+  } catch (err) {
+    console.error("[issueController.voteIssue]", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 const searchIssues = async (req, res) => {
   try {
     const { role, user_id, admin_unit_id } = req.user;
     const {
-      woreda_id, status, category, priority,
-      from_date, to_date,
-      page = 1, limit = 20,
+      woreda_id,
+      status,
+      category,
+      priority,
+      from_date,
+      to_date,
+      page = 1,
+      limit = 20,
     } = req.query;
 
     const params = [];
     const conditions = [];
 
-    // Scope woreda_admin to their own unit automatically
     if (role === "woreda_admin") {
       params.push(admin_unit_id);
       conditions.push(`i.woreda_id = $${params.length}`);
@@ -150,10 +174,7 @@ const searchIssues = async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         i.id, i.issue_number, i.title, i.category, i.status,
-         i.severity, i.priority, i.address, i.reported_at,
-         ST_Y(i.location::geometry) AS latitude,
-         ST_X(i.location::geometry) AS longitude,
+         i.*,
          u.full_name AS reporter_name,
          COUNT(m.id)::int AS media_count
        FROM issues i
@@ -163,7 +184,7 @@ const searchIssues = async (req, res) => {
        GROUP BY i.id, u.full_name
        ORDER BY i.reported_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
+      params,
     );
 
     res.json({
@@ -177,4 +198,11 @@ const searchIssues = async (req, res) => {
   }
 };
 
-module.exports = { createIssue, getIssue, getUserIssues, updateIssueStatus, searchIssues };
+module.exports = {
+  createIssue,
+  getIssue,
+  getUserIssues,
+  updateIssueStatus,
+  searchIssues,
+  voteIssue, // ✅ added
+};

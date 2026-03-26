@@ -366,8 +366,102 @@ const changePassword = async (req, res) => {
   }
 };
 
+/* ------------------------------------------------------------------ */
+/* POST /auth/signup-admin                                             */
+/* ------------------------------------------------------------------ */
+const signupAdmin = async (req, res) => {
+  if (!validate(req, res)) return;
+
+  try {
+    const {
+      phone,
+      email = null,
+      password,
+      full_name,
+      admin_unit_id, // REQUIRED for admin
+    } = req.body;
+
+    const existing = await pool.query(
+      `SELECT id FROM users WHERE phone=$1 OR (email IS NOT NULL AND email=$2)`,
+      [phone, email],
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Phone or email already registered",
+      });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      `INSERT INTO users 
+       (id, phone, email, password_hash, full_name, role, admin_unit_id, is_verified, is_active)
+       VALUES ($1,$2,$3,$4,$5,'woreda_admin',$6,TRUE,TRUE)`,
+      [uuidv4(), phone, email, password_hash, full_name, admin_unit_id],
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Admin account created successfully",
+    });
+  } catch (err) {
+    console.error("[authController.signupAdmin]", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* POST /auth/signup-employee                                          */
+/* ------------------------------------------------------------------ */
+const signupEmployee = async (req, res) => {
+  if (!validate(req, res)) return;
+
+  try {
+    const {
+      phone,
+      email = null,
+      password,
+      full_name,
+      admin_unit_id, // employee belongs to a unit
+    } = req.body;
+
+    const existing = await pool.query(
+      `SELECT id FROM users WHERE phone=$1 OR (email IS NOT NULL AND email=$2)`,
+      [phone, email],
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Phone or email already registered",
+      });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      `INSERT INTO users 
+       (id, phone, email, password_hash, full_name, role, admin_unit_id, is_verified, is_active)
+       VALUES ($1,$2,$3,$4,$5,'employee',$6,TRUE,TRUE)`,
+      [uuidv4(), phone, email, password_hash, full_name, admin_unit_id],
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Employee account created successfully",
+    });
+  } catch (err) {
+    console.error("[authController.signupEmployee]", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 module.exports = {
   signup,
+  signupAdmin,
+  signupEmployee,
   verifySignup,
   login,
   refreshToken,
