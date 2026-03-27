@@ -1,6 +1,7 @@
 // services/issueService.js
 const pool = require("../db");
 const { v4: uuidv4 } = require("uuid");
+const { locateAdministrativeUnit } = require("./geospatialService");
 
 const createIssue = async (issueData) => {
   const {
@@ -23,15 +24,26 @@ const createIssue = async (issueData) => {
 
     const issueId = uuidv4();
 
+    // ✅ NEW: get admin location
+    const locationData = await locateAdministrativeUnit(latitude, longitude);
+
+    if (!locationData.woreda) {
+      throw new Error(
+        "Your location is outside of Ethiopia or not mapped in our system. Please provide a more specific location or contact support.",
+      );
+    }
+
     const issueResult = await client.query(
       `INSERT INTO issues
        (id, title, description, category,
         latitude, longitude, address,
-        status, source, reporter_id, image_url, votes)
+        status, source, reporter_id, image_url, votes,
+        region_name, zone_name, woreda_name)
        VALUES
        ($1, $2, $3, $4,
         $5, $6, $7,
-        'reported', $8, $9, $10, 0)
+        'reported', $8, $9, $10, 0,
+        $11, $12, $13)
        RETURNING *`,
       [
         issueId,
@@ -44,6 +56,9 @@ const createIssue = async (issueData) => {
         source,
         reporter_id,
         image_url,
+        locationData.region,
+        locationData.zone,
+        locationData.woreda,
       ],
     );
 
@@ -82,7 +97,7 @@ const createIssue = async (issueData) => {
 };
 
 /**
- * ✅ NEW: Toggle vote
+Toggle vote
  */
 const voteIssue = async (issueId, userId) => {
   const client = await pool.connect();
@@ -169,7 +184,7 @@ const updateIssueStatus = async (issueId, status) => {
 
 module.exports = {
   createIssue,
-  voteIssue, // ✅ added
+  voteIssue,
   getIssueById,
   getUserIssues,
   updateIssueStatus,
