@@ -4,6 +4,10 @@ const express = require("express");
 
 const app = express();
 
+// Swagger setup
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -18,6 +22,7 @@ app.use("/auth", authRoutes);
 app.use("/issues", issueRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/technician", technicianRoutes);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check route
 app.get("/", (req, res) => {

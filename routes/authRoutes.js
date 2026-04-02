@@ -11,9 +11,8 @@ const authenticate = require("../middleware/authMiddleware");
 // Rate limiters
 // ---------------------------------------------------------------------------
 
-/** Strict limiter for OTP-sending endpoints (prevent SMS abuse) */
 const otpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
+  windowMs: 10 * 60 * 1000,
   max: 5,
   message: {
     success: false,
@@ -23,9 +22,8 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** General auth limiter for login / password reset */
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 20,
   message: { success: false, message: "Too many requests. Try again later." },
   standardHeaders: true,
@@ -33,7 +31,7 @@ const authLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
-// Reusable validators
+// Validators
 // ---------------------------------------------------------------------------
 const phoneValidator = body("phone")
   .matches(/^\+251[0-9]{9}$/)
@@ -52,7 +50,31 @@ const passwordValidator = (field) =>
 // Routes
 // ---------------------------------------------------------------------------
 
-// POST /auth/signup — register a new citizen account
+// POST /api/auth/signup
+/**
+ * @swagger
+ * /api/auth/signup:
+ *   post:
+ *     summary: Register a new citizen
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251912345678"
+ *             email: "user@example.com"
+ *             password: "StrongPass123"
+ *             full_name: "Abel Tesfaye"
+ *     responses:
+ *       201:
+ *         description: OTP sent
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "OTP sent to phone"
+ */
 router.post(
   "/signup",
   otpLimiter,
@@ -65,7 +87,29 @@ router.post(
   authController.signup,
 );
 
-// POST /auth/verify-signup — confirm OTP and activate account
+// POST /api/auth/verify-signup
+/**
+ * @swagger
+ * /api/auth/verify-signup:
+ *   post:
+ *     summary: Verify OTP and activate account
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251912345678"
+ *             code: "123456"
+ *     responses:
+ *       200:
+ *         description: Account verified
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Account verified successfully"
+ */
 router.post(
   "/verify-signup",
   otpLimiter,
@@ -79,7 +123,76 @@ router.post(
   authController.verifySignup,
 );
 
-// POST /auth/login — password-based login
+// POST /api/auth/login
+// POST /api/auth/login
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "+251912345678"
+ *               password:
+ *                 type: string
+ *                 example: "StrongPass123"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 accessToken:
+ *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 refreshToken:
+ *                   type: string
+ *                   example: "dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4="
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "cee5c2e5-130c-4e20-b22d-6a5fb8a240aa"
+ *                     phone:
+ *                       type: string
+ *                       example: "+251991343124"
+ *                     email:
+ *                       type: string
+ *                       example: "abenezer@test.com"
+ *                     full_name:
+ *                       type: string
+ *                       example: "Abenezer Seleshi Abdisa"
+ *                     role:
+ *                       type: string
+ *                       example: "citizen"
+ *                     language:
+ *                       type: string
+ *                       example: "en"
+ *                     admin_unit_id:
+ *                       type: string
+ *                       nullable: true
+ *                       example: null
+ *                     is_verified:
+ *                       type: boolean
+ *                       example: true
+ */
 router.post(
   "/login",
   authLimiter,
@@ -90,13 +203,81 @@ router.post(
   authController.login,
 );
 
-// POST /auth/refresh — rotate refresh token
+// POST /api/auth/refresh
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             refreshToken: "your-refresh-token"
+ *     responses:
+ *       200:
+ *         description: New Access Token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 accessToken:
+ *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 refreshToken:
+ *                   type: string
+ *                   example: "dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4="
+ */
 router.post("/refresh", authLimiter, authController.refreshToken);
 
-// POST /auth/logout — blacklist refresh token (authenticated)
+// POST /api/auth/logout
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Logged out successfully"
+ */
 router.post("/logout", authenticate, authController.logout);
 
-// POST /auth/forgot-password — send password reset OTP
+// POST /api/auth/forgot-password
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Send password reset OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251912345678"
+ *     responses:
+ *       200:
+ *         description: OTP sent
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Password reset OTP sent"
+ */
 router.post(
   "/forgot-password",
   otpLimiter,
@@ -104,7 +285,30 @@ router.post(
   authController.forgotPassword,
 );
 
-// POST /auth/reset-password — verify OTP and set new password
+// POST /api/auth/reset-password
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251912345678"
+ *             code: "123456"
+ *             new_password: "NewStrongPass123"
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Password reset successful"
+ */
 router.post(
   "/reset-password",
   authLimiter,
@@ -119,7 +323,31 @@ router.post(
   authController.resetPassword,
 );
 
-// POST /auth/change-password — change password while logged in (authenticated)
+// POST /api/auth/change-password
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change password
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             current_password: "OldPass123"
+ *             new_password: "NewStrongPass123"
+ *     responses:
+ *       200:
+ *         description: Password changed
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Password changed successfully"
+ */
 router.post(
   "/change-password",
   authenticate,
@@ -133,7 +361,26 @@ router.post(
   authController.changePassword,
 );
 
-// Admin signup (protected or not depending on your system)
+// POST /api/auth/signup-admin
+/**
+ * @swagger
+ * /api/auth/signup-admin:
+ *   post:
+ *     summary: Create admin account
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251911111111"
+ *             full_name: "Admin User"
+ *             password: "AdminPass123"
+ *             admin_unit_id: "unit123"
+ *     responses:
+ *       201:
+ *         description: Admin created
+ */
 router.post(
   "/signup-admin",
   authLimiter,
@@ -146,7 +393,26 @@ router.post(
   authController.signupAdmin,
 );
 
-// Employee signup
+// POST /api/auth/signup-employee
+/**
+ * @swagger
+ * /api/auth/signup-employee:
+ *   post:
+ *     summary: Create employee account
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           example:
+ *             phone: "+251922222222"
+ *             full_name: "Employee User"
+ *             password: "EmployeePass123"
+ *             admin_unit_id: "unit123"
+ *     responses:
+ *       201:
+ *         description: Employee created
+ */
 router.post(
   "/signup-employee",
   authLimiter,

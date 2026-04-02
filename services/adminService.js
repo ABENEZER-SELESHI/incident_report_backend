@@ -251,10 +251,101 @@ const getAllTechnicians = async () => {
   }
 };
 
+/**
+ * Fetch issues scoped by admin level with optional filters.
+ *
+ * @param {string} role - Admin role
+ * @param {string|null} adminUnitId - ID of woreda/zone/city/region
+ * @param {object} filters - Optional filters (status, category, page, limit)
+ * @returns {Promise<{issues: object[], total: number, page: number, limit: number}>}
+ */
+
+const getScopedIssues = async (role, adminUnitId, filters = {}) => {
+  try {
+    const { status, category, page = 1, limit = 20 } = filters;
+
+    const params = [];
+    const conditions = [];
+
+    // 🧠 ROLE-BASED FILTERING
+    switch (role) {
+      case "woreda_admin":
+        params.push(adminUnitId);
+        conditions.push(`i.woreda_id = $${params.length}`);
+        break;
+
+      case "city_admin":
+        params.push(adminUnitId);
+        conditions.push(`i.city_id = $${params.length}`);
+        break;
+
+      case "zone_admin":
+        params.push(adminUnitId);
+        conditions.push(`i.zone_id = $${params.length}`);
+        break;
+
+      case "regional_admin":
+        params.push(adminUnitId);
+        conditions.push(`i.region_id = $${params.length}`);
+        break;
+
+      case "federal_admin":
+        conditions.push("1=1"); // no restriction
+        break;
+
+      default:
+        throw new Error("Unauthorized role");
+    }
+
+    // 🧩 OPTIONAL FILTERS
+    if (status) {
+      params.push(status);
+      conditions.push(`i.status = $${params.length}`);
+    }
+
+    if (category) {
+      params.push(category);
+      conditions.push(`i.category = $${params.length}`);
+    }
+
+    const where = conditions.join(" AND ");
+    const offset = (Math.max(1, Number(page)) - 1) * Number(limit);
+
+    const [dataRes, countRes] = await Promise.all([
+      pool.query(
+        `SELECT
+           i.*,
+           u.full_name AS reporter_name
+         FROM issues i
+         JOIN users u ON u.id = i.reporter_id
+         WHERE ${where}
+         ORDER BY i.reported_at DESC
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, Number(limit), offset],
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS total FROM issues i WHERE ${where}`,
+        params,
+      ),
+    ]);
+
+    return {
+      issues: dataRes.rows,
+      total: countRes.rows[0].total,
+      page: Number(page),
+      limit: Number(limit),
+    };
+  } catch (err) {
+    console.error("[adminService.getScopedIssues]", err.message);
+    throw err;
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPendingIssues,
   getIssuesByWoreda,
   assignTechnician,
   getAllTechnicians,
+  getScopedIssues,
 };
