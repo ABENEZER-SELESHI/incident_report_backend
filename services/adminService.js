@@ -341,10 +341,158 @@ const getScopedIssues = async (role, adminUnitId, filters = {}) => {
   }
 };
 
+//stats service
+/**
+ * Get issue counts scoped by admin level.
+ *
+ * @param {string} role
+ * @param {string|null} adminUnitId
+ * @returns {Promise<{ total: number, pending: number, in_progress: number, resolved: number }>}
+ */
+const getScopedIssueCounts = async (role, adminUnitId) => {
+  try {
+    const params = [];
+    const conditions = [];
+
+    // ROLE-BASED SCOPING
+    switch (role) {
+      case "woreda_admin":
+        params.push(adminUnitId);
+        conditions.push(`woreda_id = $${params.length}`);
+        break;
+
+      case "city_admin":
+        params.push(adminUnitId);
+        conditions.push(`city_id = $${params.length}`);
+        break;
+
+      case "zone_admin":
+        params.push(adminUnitId);
+        conditions.push(`zone_id = $${params.length}`);
+        break;
+
+      case "regional_admin":
+        params.push(adminUnitId);
+        conditions.push(`region_id = $${params.length}`);
+        break;
+
+      case "federal_admin":
+        conditions.push("1=1");
+        break;
+
+      default:
+        throw new Error("Unauthorized role");
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const result = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+
+        COUNT(*) FILTER (
+          WHERE status IN ('reported','verified')
+        )::int AS pending,
+
+        COUNT(*) FILTER (
+          WHERE status = 'in_progress'
+        )::int AS in_progress,
+
+        COUNT(*) FILTER (
+          WHERE status = 'resolved'
+        )::int AS resolved
+
+      FROM issues
+      ${where}
+      `,
+      params,
+    );
+
+    return result.rows[0];
+  } catch (err) {
+    console.error("[adminService.getScopedIssueCounts]", err.message);
+    throw err;
+  }
+};
+
+//dashboard stats service
+/**
+ * Get minimal dashboard counts scoped by admin level
+ */
+const getScopedDashboardCounts = async (role, adminUnitId) => {
+  try {
+    const params = [];
+    const conditions = [];
+
+    // ROLE-BASED SCOPING
+    switch (role) {
+      case "woreda_admin":
+        params.push(adminUnitId);
+        conditions.push(`woreda_id = $${params.length}`);
+        break;
+
+      case "city_admin":
+        params.push(adminUnitId);
+        conditions.push(`city_id = $${params.length}`);
+        break;
+
+      case "zone_admin":
+        params.push(adminUnitId);
+        conditions.push(`zone_id = $${params.length}`);
+        break;
+
+      case "regional_admin":
+        params.push(adminUnitId);
+        conditions.push(`region_id = $${params.length}`);
+        break;
+
+      case "federal_admin":
+        conditions.push("1=1");
+        break;
+
+      default:
+        throw new Error("Unauthorized role");
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const result = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+
+        COUNT(*) FILTER (
+          WHERE status IN ('reported','verified')
+        )::int AS pending,
+
+        COUNT(*) FILTER (
+          WHERE status = 'in_progress'
+        )::int AS in_progress,
+
+        COUNT(*) FILTER (
+          WHERE status = 'resolved'
+        )::int AS completed
+
+      FROM issues
+      ${where}
+      `,
+      params,
+    );
+
+    return result.rows[0];
+  } catch (err) {
+    console.error("[adminService.getScopedDashboardCounts]", err.message);
+    throw err;
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPendingIssues,
   getIssuesByWoreda,
+  getScopedDashboardCounts,
+  getScopedIssueCounts,
   assignTechnician,
   getAllTechnicians,
   getScopedIssues,

@@ -8,11 +8,38 @@ const authenticate = require("../middleware/authMiddleware");
 const authorize = require("../middleware/roleMiddleware");
 
 // GET /api/admin/dashboard
+/**
+ * @swagger
+ * /api/admin/dashboard:
+ *   get:
+ *     summary: Get dashboard issue counts (scoped)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Issue counts
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data:
+ *                 total: 120
+ *                 pending: 35
+ *                 in_progress: 20
+ *                 completed: 65
+ */
 router.get(
   "/dashboard",
   authenticate,
-  authorize("woreda_admin", "federal_admin", "regional_admin"),
-  adminController.getDashboard,
+  authorize(
+    "woreda_admin",
+    "city_admin",
+    "zone_admin",
+    "regional_admin",
+    "federal_admin",
+  ),
+  adminController.getDashboardCounts,
 );
 
 // GET /api/admin/scoped-issues/pending
