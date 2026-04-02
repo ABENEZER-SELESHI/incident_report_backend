@@ -12,6 +12,7 @@ const options = {
     servers: [
       {
         url: "http://localhost:3000",
+        url: "https://incident-report-backend-cyep.onrender.com/",
       },
     ],
   },
