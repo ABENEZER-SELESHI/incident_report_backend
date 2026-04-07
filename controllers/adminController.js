@@ -1,6 +1,16 @@
 // controllers/adminController.js
+const pool = require("../db");
 const { validationResult } = require("express-validator");
 const adminService = require("../services/adminService");
+const { locateAdministrativeUnit } = require("../services/geospatialService");
+
+const roleHierarchy = {
+  federal_admin: 5,
+  regional_admin: 4,
+  zone_admin: 3,
+  woreda_admin: 2,
+  city_admin: 1,
+};
 
 /**
  * GET /api/admin/issues/pending
@@ -218,6 +228,94 @@ const getDashboardCounts = async (req, res) => {
   }
 };
 
+const createAdmin = async (req, res) => {
+  try {
+    const { full_name, phone, password, role, latitude, longitude } = req.body;
+    const creatorRole = req.user.role;
+
+    if (roleHierarchy[creatorRole] <= roleHierarchy[role]) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to create this admin role",
+      });
+    }
+
+    let admin_unit_id = null;
+
+    if (role !== "federal_admin") {
+      const location = await locateAdministrativeUnit(latitude, longitude);
+
+      console.log("LOCATION:", location);
+
+      if (!location || !location.woreda) {
+        return res.status(400).json({
+          success: false,
+          message: "No matching administrative unit found",
+        });
+      }
+
+      let query = "";
+      let value = "";
+
+      switch (role) {
+        case "regional_admin":
+          query =
+            "SELECT id FROM regions WHERE LOWER(name) = LOWER($1) LIMIT 1";
+          value = location.region;
+          break;
+
+        case "zone_admin":
+          query = "SELECT id FROM zones WHERE LOWER(name) = LOWER($1) LIMIT 1";
+          value = location.zone;
+          break;
+
+        case "woreda_admin":
+        case "city_admin":
+          query =
+            "SELECT id FROM woredas WHERE LOWER(name) = LOWER($1) LIMIT 1";
+          value = location.woreda;
+          break;
+      }
+
+      console.log("LOOKUP VALUE:", value);
+
+      const result = await pool.query(query, [value]);
+
+      if (result.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: `No matching ${role} unit found in DB for "${value}"`,
+        });
+      }
+
+      admin_unit_id = result.rows[0].id;
+
+      console.log("FINAL admin_unit_id:", admin_unit_id);
+    }
+
+    const admin = await adminService.createAdmin({
+      full_name,
+      phone,
+      password,
+      role,
+      admin_unit_id,
+      created_by: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Admin created successfully",
+      data: admin,
+    });
+  } catch (error) {
+    console.error("CREATE ADMIN ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create admin",
+    });
+  }
+};
+
 module.exports = {
   getDashboardCounts,
   getPendingIssues,
@@ -230,4 +328,5 @@ module.exports = {
   getPendingIssuesCount,
   getInProgressIssuesCount,
   getResolvedIssuesCount,
+  createAdmin,
 };

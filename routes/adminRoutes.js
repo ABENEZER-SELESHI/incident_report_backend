@@ -307,4 +307,129 @@ router.get(
   adminController.getTechnicians,
 );
 
+// create admin route
+/**
+ * @swagger
+ * /api/admin/create-admin:
+ *   post:
+ *     summary: Create a new admin with geospatial assignment
+ *     description: >
+ *       Creates a new admin user and automatically assigns their administrative unit
+ *       (region, zone, or woreda) based on provided latitude and longitude.
+ *
+ *       Role hierarchy enforcement:
+ *         - federal_admin → can create regional_admin
+ *         - regional_admin → can create zone_admin
+ *         - zone_admin → can create city_admin
+ *         - city_admin → can create woreda_admin
+ *
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - full_name
+ *               - phone
+ *               - password
+ *               - role
+ *               - latitude
+ *               - longitude
+ *             properties:
+ *               full_name:
+ *                 type: string
+ *                 example: "Abel Tesfaye"
+ *
+ *               phone:
+ *                 type: string
+ *                 example: "+251912345678"
+ *
+ *               password:
+ *                 type: string
+ *                 example: "TempPass123"
+ *
+ *               role:
+ *                 type: string
+ *                 enum:
+ *                   - regional_admin
+ *                   - zone_admin
+ *                   - city_admin
+ *                   - woreda_admin
+ *                 example: "zone_admin"
+ *
+ *               latitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 9.03
+ *
+ *               longitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 38.7578
+ *
+ *     responses:
+ *       201:
+ *         description: Admin created successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Admin created successfully"
+ *               data:
+ *                 id: "8c9a1c52-2f3c-4d7e-bf2a-9d98f0f9c123"
+ *                 full_name: "Abel Tesfaye"
+ *                 phone: "+251912345678"
+ *                 role: "zone_admin"
+ *                 admin_unit_id: "zone-uuid"
+ *                 latitude: 9.03
+ *                 longitude: 38.7578
+ *
+ *       400:
+ *         description: Validation or geolocation error
+ *         content:
+ *           application/json:
+ *             examples:
+ *               validationError:
+ *                 summary: Input validation failed
+ *                 value:
+ *                   success: false
+ *                   errors:
+ *                     - msg: "Latitude is required"
+ *                       param: "latitude"
+ *                       location: "body"
+ *
+ *               locationError:
+ *                 summary: Could not resolve location
+ *                 value:
+ *                   success: false
+ *                   message: "Unable to resolve administrative location"
+ *
+ *       403:
+ *         description: Unauthorized role creation
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: "You are not authorized to create this role"
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: "Internal server error"
+ */
+router.post(
+  "/create-admin",
+  authenticate,
+  authorize("federal_admin", "regional_admin", "zone_admin", "city_admin"),
+  adminController.createAdmin,
+);
+
 module.exports = router;

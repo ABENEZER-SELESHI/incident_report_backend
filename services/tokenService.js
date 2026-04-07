@@ -1,10 +1,10 @@
 // services/tokenService.js
-const jwt    = require("jsonwebtoken");
+const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const pool   = require("../db");
+const pool = require("../db");
 const { v4: uuidv4 } = require("uuid");
 
-const ACCESS_TTL  = "15m";
+const ACCESS_TTL = "1d";
 const REFRESH_TTL = "7d";
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,20 +21,29 @@ const hashToken = (token) =>
  */
 const generateTokens = async (user) => {
   const payload = {
-    user_id:       user.id,
-    role:          user.role,
+    user_id: user.id,
+    role: user.role,
     admin_unit_id: user.admin_unit_id || null,
-    version:       user.refresh_token_version || 0,
+    version: user.refresh_token_version || 0,
   };
 
-  const accessToken  = jwt.sign(payload, process.env.JWT_SECRET,         { expiresIn: ACCESS_TTL });
-  const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+  const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: ACCESS_TTL,
+  });
+  const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: REFRESH_TTL,
+  });
 
   // Persist hashed refresh token
   await pool.query(
     `INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
      VALUES ($1,$2,$3,$4)`,
-    [uuidv4(), user.id, hashToken(refreshToken), new Date(Date.now() + REFRESH_TTL_MS)]
+    [
+      uuidv4(),
+      user.id,
+      hashToken(refreshToken),
+      new Date(Date.now() + REFRESH_TTL_MS),
+    ],
   );
 
   return { accessToken, refreshToken };
@@ -45,8 +54,7 @@ const generateTokens = async (user) => {
  * @param {string} token
  * @returns {object} decoded payload
  */
-const verifyAccessToken = (token) =>
-  jwt.verify(token, process.env.JWT_SECRET);
+const verifyAccessToken = (token) => jwt.verify(token, process.env.JWT_SECRET);
 
 /**
  * Verify a refresh token and confirm it is not blacklisted.
@@ -59,11 +67,13 @@ const verifyRefreshToken = async (token) => {
 
   const result = await pool.query(
     `SELECT revoked FROM refresh_tokens WHERE token_hash=$1`,
-    [hashToken(token)]
+    [hashToken(token)],
   );
 
   if (result.rows.length === 0 || result.rows[0].revoked) {
-    throw Object.assign(new Error("Refresh token revoked or not found"), { code: "TOKEN_REVOKED" });
+    throw Object.assign(new Error("Refresh token revoked or not found"), {
+      code: "TOKEN_REVOKED",
+    });
   }
 
   return decoded;
@@ -76,7 +86,7 @@ const verifyRefreshToken = async (token) => {
 const blacklistRefreshToken = async (token) => {
   await pool.query(
     `UPDATE refresh_tokens SET revoked=TRUE WHERE token_hash=$1`,
-    [hashToken(token)]
+    [hashToken(token)],
   );
 };
 
@@ -87,8 +97,13 @@ const blacklistRefreshToken = async (token) => {
  */
 const revokeAllUserTokens = async (userId) => {
   await Promise.all([
-    pool.query(`UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1`, [userId]),
-    pool.query(`UPDATE users SET refresh_token_version = refresh_token_version + 1 WHERE id=$1`, [userId]),
+    pool.query(`UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1`, [
+      userId,
+    ]),
+    pool.query(
+      `UPDATE users SET refresh_token_version = refresh_token_version + 1 WHERE id=$1`,
+      [userId],
+    ),
   ]);
 };
 
