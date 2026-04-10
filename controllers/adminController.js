@@ -3,6 +3,7 @@ const pool = require("../db");
 const { validationResult } = require("express-validator");
 const adminService = require("../services/adminService");
 const { locateAdministrativeUnit } = require("../services/geospatialService");
+const crypto = require("crypto");
 
 const roleHierarchy = {
   federal_admin: 5,
@@ -230,88 +231,66 @@ const getDashboardCounts = async (req, res) => {
 
 const createAdmin = async (req, res) => {
   try {
-    const { full_name, phone, password, role, latitude, longitude } = req.body;
-    const creatorRole = req.user.role;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
 
-    if (roleHierarchy[creatorRole] <= roleHierarchy[role]) {
-      return res.status(403).json({
+    const { name, phone_number, role, latitude, longitude } = req.body;
+
+    if (!name || !phone_number || !role || !latitude || !longitude) {
+      return res.status(400).json({
         success: false,
-        message: "You are not allowed to create this admin role",
+        message: "name, phone_number, role, latitude, longitude are required",
       });
     }
 
-    let admin_unit_id = null;
+    // 🔍 1. Get location from geospatial
+    const geo = await locateAdministrativeUnit(latitude, longitude);
 
-    if (role !== "federal_admin") {
-      const location = await locateAdministrativeUnit(latitude, longitude);
-
-      console.log("LOCATION:", location);
-
-      if (!location || !location.woreda) {
-        return res.status(400).json({
-          success: false,
-          message: "No matching administrative unit found",
-        });
-      }
-
-      let query = "";
-      let value = "";
-
-      switch (role) {
-        case "regional_admin":
-          query =
-            "SELECT id FROM regions WHERE LOWER(name) = LOWER($1) LIMIT 1";
-          value = location.region;
-          break;
-
-        case "zone_admin":
-          query = "SELECT id FROM zones WHERE LOWER(name) = LOWER($1) LIMIT 1";
-          value = location.zone;
-          break;
-
-        case "woreda_admin":
-        case "city_admin":
-          query =
-            "SELECT id FROM woredas WHERE LOWER(name) = LOWER($1) LIMIT 1";
-          value = location.woreda;
-          break;
-      }
-
-      console.log("LOOKUP VALUE:", value);
-
-      const result = await pool.query(query, [value]);
-
-      if (result.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: `No matching ${role} unit found in DB for "${value}"`,
-        });
-      }
-
-      admin_unit_id = result.rows[0].id;
-
-      console.log("FINAL admin_unit_id:", admin_unit_id);
+    if (!geo || (!geo.region && !geo.zone && !geo.woreda)) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve administrative location",
+      });
     }
 
-    const admin = await adminService.createAdmin({
-      full_name,
-      phone,
-      password,
+    console.log("🌍 GEO:", geo);
+
+    // 🔐 2. Generate temp password
+    const tempPassword = crypto.randomBytes(4).toString("hex");
+
+    // 🧠 3. Create admin (NO admin_unit_id anymore)
+    const newAdmin = await adminService.createAdmin({
+      name,
+      phone_number,
       role,
-      admin_unit_id,
-      created_by: req.user.id,
+      password: tempPassword,
+      region: geo.region,
+      zone: geo.zone,
+      woreda: geo.woreda,
     });
 
-    return res.status(201).json({
+    // 📦 4. Response
+    res.status(201).json({
       success: true,
       message: "Admin created successfully",
-      data: admin,
+      data: {
+        id: newAdmin.id,
+        full_name: newAdmin.full_name,
+        phone: newAdmin.phone,
+        role: newAdmin.role,
+        region: newAdmin.region,
+        zone: newAdmin.zone,
+        woreda: newAdmin.woreda,
+        tempPassword,
+      },
     });
-  } catch (error) {
-    console.error("CREATE ADMIN ERROR:", error);
-    return res.status(500).json({
+  } catch (err) {
+    console.error("CREATE ADMIN ERROR:", err);
+    res.status(500).json({
       success: false,
-      message: error.message || "Failed to create admin",
+      message: err.message,
     });
   }
 };

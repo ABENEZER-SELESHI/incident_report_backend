@@ -501,41 +501,32 @@ const getScopedDashboardCounts = async (role, adminUnitId) => {
 
 //create admin account
 const createAdmin = async ({
-  full_name,
-  phone,
-  password,
+  name,
+  phone_number,
   role,
-  admin_unit_id,
-  created_by,
+  password,
+  region,
+  zone,
+  woreda,
 }) => {
-  // 🔍 Check if user already exists
-  const existingUser = await pool.query(
-    "SELECT id FROM users WHERE phone = $1",
-    [phone],
-  );
-
-  if (existingUser.rows.length > 0) {
-    throw new Error("User with this phone already exists");
-  }
-
-  // 🔐 Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // 🧾 Insert new admin
   const result = await pool.query(
     `
     INSERT INTO users (
       full_name,
       phone,
-      password_hash,
       role,
-      admin_unit_id,
-      is_verified
+      password_hash,
+      region,
+      zone,
+      woreda,
+      created_at
     )
-    VALUES ($1, $2, $3, $4, $5, true)
-    RETURNING id, full_name, phone, role, admin_unit_id, created_at
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    RETURNING id, full_name, phone, role, region, zone, woreda
     `,
-    [full_name, phone, hashedPassword, role, admin_unit_id],
+    [name, phone_number, role, hashedPassword, region, zone, woreda],
   );
 
   return result.rows[0];
