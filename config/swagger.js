@@ -13,6 +13,7 @@ const options = {
       {
         url: "http://localhost:3000",
         url: "https://incident-report-backend-cyep.onrender.com/",
+        url: "https://incident-report-api-krni.onrender.com/",
       },
     ],
   },

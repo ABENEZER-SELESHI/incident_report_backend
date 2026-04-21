@@ -99,42 +99,29 @@ const getTechnicians = async (req, res) => {
 
 const getScopedIssues = async (req, res) => {
   try {
-    const { role, admin_unit_id } = req.user;
-
-    const result = await adminService.getScopedIssues(
-      role,
-      admin_unit_id,
-      req.query,
-    );
+    const result = await adminService.getScopedIssues(req.user, req.query);
 
     res.json({
       success: true,
       ...result,
     });
   } catch (err) {
-    console.error("[adminController.getScopedIssues]", err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[getScopedIssues]", err.message);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
+/**
+ * 📥 GET SCOPED PENDING ISSUES
+ */
 const getScopedPendingIssues = async (req, res) => {
   try {
-    const { role, admin_unit_id } = req.user;
+    const filters = {
+      ...req.query,
+      status: ["reported", "verified"],
+    };
 
-    if (!admin_unit_id && role !== "federal_admin") {
-      return res.status(400).json({
-        success: false,
-        message: "No admin unit assigned to this account",
-      });
-    }
-
-    const filters = { status: ["reported", "verified"] };
-
-    const result = await adminService.getScopedIssues(
-      role,
-      admin_unit_id,
-      filters,
-    );
+    const result = await adminService.getScopedIssues(req.user, filters);
 
     res.json({
       success: true,
@@ -144,8 +131,8 @@ const getScopedPendingIssues = async (req, res) => {
       limit: result.limit,
     });
   } catch (err) {
-    console.error("[adminController.getScopedPendingIssues]", err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[getScopedPendingIssues]", err.message);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

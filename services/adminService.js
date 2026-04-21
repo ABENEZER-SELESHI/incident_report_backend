@@ -272,8 +272,9 @@ const getAllTechnicians = async () => {
  * @returns {Promise<{issues: object[], total: number, page: number, limit: number}>}
  */
 
-const getScopedIssues = async (role, adminUnitId, filters = {}) => {
+const getScopedIssues = async (user, filters = {}) => {
   try {
+    const { role, region, zone, woreda } = user;
     const { status, category, page = 1, limit = 20 } = filters;
 
     const params = [];
@@ -282,37 +283,41 @@ const getScopedIssues = async (role, adminUnitId, filters = {}) => {
     // 🧠 ROLE-BASED FILTERING
     switch (role) {
       case "woreda_admin":
-        params.push(adminUnitId);
-        conditions.push(`i.woreda_id = $${params.length}`);
-        break;
-
       case "city_admin":
-        params.push(adminUnitId);
-        conditions.push(`i.city_id = $${params.length}`);
+        if (!woreda) throw new Error("Woreda not assigned");
+        params.push(woreda);
+        conditions.push(`LOWER(i.woreda_name) = LOWER($${params.length})`);
         break;
 
       case "zone_admin":
-        params.push(adminUnitId);
-        conditions.push(`i.zone_id = $${params.length}`);
+        if (!zone) throw new Error("Zone not assigned");
+        params.push(zone);
+        conditions.push(`LOWER(i.zone_name) = LOWER($${params.length})`);
         break;
 
       case "regional_admin":
-        params.push(adminUnitId);
-        conditions.push(`i.region_id = $${params.length}`);
+        if (!region) throw new Error("Region not assigned");
+        params.push(region);
+        conditions.push(`LOWER(i.region_name) = LOWER($${params.length})`);
         break;
 
       case "federal_admin":
-        conditions.push("1=1"); // no restriction
+        conditions.push("1=1");
         break;
 
       default:
         throw new Error("Unauthorized role");
     }
 
-    // 🧩 OPTIONAL FILTERS
+    // 🧩 FILTERS
     if (status) {
-      params.push(status);
-      conditions.push(`i.status = $${params.length}`);
+      if (Array.isArray(status)) {
+        params.push(status);
+        conditions.push(`i.status = ANY($${params.length})`);
+      } else {
+        params.push(status);
+        conditions.push(`i.status = $${params.length}`);
+      }
     }
 
     if (category) {
@@ -325,14 +330,16 @@ const getScopedIssues = async (role, adminUnitId, filters = {}) => {
 
     const [dataRes, countRes] = await Promise.all([
       pool.query(
-        `SELECT
-           i.*,
-           u.full_name AS reporter_name
-         FROM issues i
-         JOIN users u ON u.id = i.reporter_id
-         WHERE ${where}
-         ORDER BY i.reported_at DESC
-         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        `
+        SELECT
+          i.*,
+          u.full_name AS reporter_name
+        FROM issues i
+        JOIN users u ON u.id = i.reporter_id
+        WHERE ${where}
+        ORDER BY i.reported_at DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `,
         [...params, Number(limit), offset],
       ),
       pool.query(
