@@ -1,8 +1,21 @@
 // index.js
 require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
 
 const app = express();
+
+// CORS
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "http://192.168.208.31:3000"],
+    credentials: true,
+  }),
+);
+
+// Swagger setup
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 // Middleware
 app.use(express.json());
@@ -18,6 +31,7 @@ app.use("/auth", authRoutes);
 app.use("/issues", issueRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/technician", technicianRoutes);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check route
 app.get("/", (req, res) => {
